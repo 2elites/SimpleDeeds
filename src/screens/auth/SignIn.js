@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
 } from '../../ui/common/colors';
 import {deviceWidth, deviceHeight} from '../../ui/common/responsive';
 import {emailValidation} from '../../utils/emailValidation';
+import { WEB_CLIENT_ID } from '../../../utils/keys';
 import {
   GoogleSignin,
   GoogleSigninButton,
@@ -31,16 +32,14 @@ import {
 const GoogleImg = require('./../../../assets/images/google.png');
 
 const SignIn = ({navigation}) => {
-  GoogleSignin.configure({
-    webClientId:
-      '286008757112-gh36kp9oj12ho3mg54mlv0b23od4v759.apps.googleusercontent.com',
-    offlineAccess: true,
-  });
-
   const [isRemember, setRemember] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState(false);
+
+  const [userInfo, setUserInfo] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState(null);
 
   const onSubmit = async () => {
     setErrors(false);
@@ -51,31 +50,65 @@ const SignIn = ({navigation}) => {
     }
     navigation.navigate('AccessClosingRoom');
   };
-
-  const [userInfo, setUserInfo] = useState();
-
-  const GoogleSingUp = async () => {
+  useEffect(() => {
+    configureGoogleSign();
+  }, []);
+  
+  function configureGoogleSign() {
+    GoogleSignin.configure({
+      webClientId: WEB_CLIENT_ID,
+      offlineAccess: false
+    });
+  }
+  async function signIn() {
     try {
       await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signIn().then(result => {
-        console.log(result);
-      });
+      const userInfo = await GoogleSignin.signIn();
+      setUserInfo(userInfo);
+      console.log(userInfo)
+      setError(null);
+      setIsLoggedIn(true);
     } catch (error) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled the login flow
-        alert('User cancelled the login flow !');
+        // when user cancels sign in process,
+        Alert.alert('Process Cancelled');
       } else if (error.code === statusCodes.IN_PROGRESS) {
-        alert('Signin in progress');
-        // operation (f.e. sign in) is in progress already
+        // when in progress already
+        Alert.alert('Process in progress');
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        alert('Google play services not available or outdated !');
-        // play services not available or outdated
+        // when play services not available
+        Alert.alert('Play services are not available');
       } else {
-        console.log(error);
+        // some other error
+        Alert.alert('Something else went wrong... ', error.toString());
+        setError(error);
       }
     }
-  };
-
+  }
+  async function signOut() {
+    try {
+      await GoogleSignin.revokeAccess();
+      await GoogleSignin.signOut();
+      setIsLoggedIn(false);
+    } catch (error) {
+      Alert.alert('Something else went wrong... ', error.toString());
+    }
+  }
+  async function getCurrentUserInfo() {
+    try {
+      const userInfo = await GoogleSignin.signInSilently();
+      setUserInfo(userInfo);
+    } catch (error) {
+      if (error.code === statusCodes.SIGN_IN_REQUIRED) {
+        // when user hasn't signed in yet
+        Alert.alert('Please Sign in');
+        setIsLoggedIn(false);
+      } else {
+        Alert.alert('Something else went wrong... ', error.toString());
+        setIsLoggedIn(false);
+      }
+    }
+  }
   return (
     <View style={styles.view}>
       <View
@@ -128,7 +161,7 @@ const SignIn = ({navigation}) => {
         </TouchableOpacity>
         <Text style={styles.sublinText}>or continue with</Text>
 
-        <TouchableOpacity onPress={() => GoogleSingUp()}>
+        <TouchableOpacity onPress={() => signIn()}>
           <View style={styles.googleVIew}>
             <Image source={GoogleImg} style={styles.googleImg} />
             <Text style={styles.googleText}>Google</Text>
@@ -260,5 +293,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 10,
+  },
+  signInButton: {
+    width: 200,
+    height: 50
   },
 });
